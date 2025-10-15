@@ -4,21 +4,14 @@ import (
 	"context"
 
 	"github.com/Arroziqi/car-rental-technical-test-pharos.git/features/customer/domain/entity"
+	"github.com/Arroziqi/car-rental-technical-test-pharos.git/features/customer/domain/repository"
 )
 
-type CustomerRepository interface {
-	Create(context.Context, *entity.Customer) error
-	GetByID(context.Context, int) (*entity.Customer, error)
-	List(context.Context) ([]*entity.Customer, error)
-	Update(context.Context, *entity.Customer) error
-	Delete(context.Context, int) error
-}
-
 type CustomerUsecase struct {
-	repo CustomerRepository
+	repo repository.CustomerRepository
 }
 
-func NewCustomerUsecase(r CustomerRepository) *CustomerUsecase {
+func NewCustomerUsecase(r repository.CustomerRepository) *CustomerUsecase {
 	return &CustomerUsecase{repo: r}
 }
 

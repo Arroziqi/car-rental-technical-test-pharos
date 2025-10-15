@@ -48,7 +48,7 @@ func main() {
 	}
 
 	// Repos
-	cr := customerRepo.NewCustomerRepository(db)
+	cr := customerRepo.NewCustomerSQLRepository(db)
 	carR := carRepo.NewCarRepository(db)
 	br := bookingRepo.NewBookingRepository(db)
 

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -18,15 +19,29 @@ func NewCustomerController(u *usecase.CustomerUsecase) *CustomerController {
 }
 
 func (c *CustomerController) Create(ctx *gin.Context) {
+	log.Println("Starting customer creation...")
+
 	var req custEntity.Customer
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Printf("Error binding JSON: %v", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("Request data: %+v", req)
+
+	if req.MembershipID != nil && *req.MembershipID == 0 {
+		log.Println("MembershipID is 0, setting to nil")
+		req.MembershipID = nil
+	}
+
+	log.Println("Calling usecase to create customer...")
 	if err := c.uc.Create(ctx, &req); err != nil {
+		log.Printf("Error creating customer: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	log.Printf("Customer created successfully: %+v", req)
 	ctx.JSON(http.StatusCreated, req)
 }
 
