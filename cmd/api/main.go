@@ -24,6 +24,11 @@ import (
 	bookingRepo "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/adapter/persistence/sql"
 	bookingUC "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/application/usecase"
 	bookingCtrl "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/presentation/controller"
+
+	// driver
+	driverRepo "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/driver/adapter/persistence/sql"
+	driverUC "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/driver/application/usecase"
+	driverCtrl "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/driver/presentation/controller"
 )
 
 func main() {
@@ -51,16 +56,19 @@ func main() {
 	cr := customerRepo.NewCustomerSQLRepository(db)
 	carR := carRepo.NewCarRepository(db)
 	br := bookingRepo.NewBookingRepository(db)
+	dr := driverRepo.NewDriverSQLRepository(db)
 
 	// Usecases
 	customerUsecase := customerUC.NewCustomerUsecase(cr)
 	carUsecase := carUC.NewCarUsecase(carR)
-	bookingUsecase := bookingUC.NewBookingUsecase(br, carR, cr) // booking needs car & customer
+	bookingUsecase := bookingUC.NewBookingUsecase(br, carR, cr)
+	driverUsecase := driverUC.NewDriverUsecase(dr)
 
 	// Controllers
 	customerController := customerCtrl.NewCustomerController(customerUsecase)
 	carController := carCtrl.NewCarController(carUsecase)
 	bookingController := bookingCtrl.NewBookingController(bookingUsecase)
+	driverController := driverCtrl.NewDriverController(driverUsecase)
 
 	// Router
 	r := gin.Default()
@@ -94,6 +102,16 @@ func main() {
 		book.GET("/:id", bookingController.GetByID)
 		book.PUT("/:id", bookingController.Update)
 		book.DELETE("/:id", bookingController.Delete)
+	}
+
+	// Driver routes
+	driver := api.Group("/drivers")
+	{
+		driver.POST("", driverController.Create)
+		driver.GET("", driverController.List)
+		driver.GET("/:id", driverController.GetByID)
+		driver.PUT("/:id", driverController.Update)
+		driver.DELETE("/:id", driverController.Delete)
 	}
 
 	port := os.Getenv("PORT")

@@ -3,20 +3,13 @@ package usecase
 import (
 	"context"
 	"errors"
-	"time"
 
 	bookEntity "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/domain/entity"
+	bookRepo "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/domain/repository"
+	bookingService "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/booking/domain/service"
 	carEntity "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/car/domain/entity"
 	custEntity "github.com/Arroziqi/car-rental-technical-test-pharos.git/features/customer/domain/entity"
 )
-
-type BookingRepository interface {
-	Create(context.Context, *bookEntity.Booking) error
-	GetByID(context.Context, int) (*bookEntity.Booking, error)
-	List(context.Context) ([]*bookEntity.Booking, error)
-	Update(context.Context, *bookEntity.Booking) error
-	Delete(context.Context, int) error
-}
 
 type CarRepository interface {
 	GetByID(context.Context, int) (*carEntity.Car, error)
@@ -28,12 +21,12 @@ type CustomerRepository interface {
 }
 
 type BookingUsecase struct {
-	bookingRepo BookingRepository
+	bookingRepo bookRepo.BookingRepository
 	carRepo     CarRepository
 	custRepo    CustomerRepository
 }
 
-func NewBookingUsecase(b BookingRepository, cr CarRepository, crCust CustomerRepository) *BookingUsecase {
+func NewBookingUsecase(b bookRepo.BookingRepository, cr CarRepository, crCust CustomerRepository) *BookingUsecase {
 	return &BookingUsecase{
 		bookingRepo: b,
 		carRepo:     cr,
@@ -41,22 +34,10 @@ func NewBookingUsecase(b BookingRepository, cr CarRepository, crCust CustomerRep
 	}
 }
 
-func daysBetween(a, b time.Time) int {
-	start := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, a.Location())
-	end := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, b.Location())
-	d := int(end.Sub(start).Hours() / 24)
-	if d < 0 {
-		return 0
-	}
-	if d == 0 {
-		return 1 // treat same-day as 1 day rent
-	}
-	return d
-}
-
 func (u *BookingUsecase) Create(ctx context.Context, b *bookEntity.Booking) error {
 	// validate customer
-	if _, err := u.custRepo.GetByID(ctx, b.CustomerID); err != nil {
+	cust, err := u.custRepo.GetByID(ctx, b.CustomerID)
+	if err != nil {
 		return errors.New("customer not found")
 	}
 
@@ -65,26 +46,35 @@ func (u *BookingUsecase) Create(ctx context.Context, b *bookEntity.Booking) erro
 	if err != nil {
 		return errors.New("car not found")
 	}
-	// check stock
 	if car.Stock <= 0 {
 		return errors.New("car out of stock")
 	}
 
-	// compute days and total cost
-	days := daysBetween(b.StartRent, b.EndRent)
-	base := float64(days) * car.DailyRent
-	b.TotalCost = base
+	// attach customer for discount calculation
+	b.Customer = cust
 
-	// mark finished default false
+	// compute days and total cost
+	days := bookingService.DaysOfRent(b)
+	b.TotalCost = float64(days) * car.DailyRent
 	b.Finished = false
+
+	// calculate discount via domain service
+	bookingService.CalculateDiscount(b)
+
+	// calculate driver cost safely
+	if b.DriverID != nil && b.Driver != nil && b.Driver.DailyCost != nil {
+		b.TotalDriverCost = bookingService.CalculateDriverCost(b)
+	} else {
+		b.TotalDriverCost = 0
+	}
 
 	// create booking
 	if err := u.bookingRepo.Create(ctx, b); err != nil {
 		return err
 	}
 
-	// reduce stock
-	car.Stock = car.Stock - 1
+	// reduce car stock
+	car.Stock--
 	if err := u.carRepo.Update(ctx, car); err != nil {
 		return err
 	}
@@ -101,11 +91,26 @@ func (u *BookingUsecase) List(ctx context.Context) ([]*bookEntity.Booking, error
 }
 
 func (u *BookingUsecase) Update(ctx context.Context, b *bookEntity.Booking) error {
+	// attach customer jika belum ada
+	if b.Customer == nil {
+		cust, err := u.custRepo.GetByID(ctx, b.CustomerID)
+		if err == nil {
+			b.Customer = cust
+		}
+	}
+
+	// recompute discount & driver cost
+	bookingService.CalculateDiscount(b)
+	if b.DriverID != nil && b.Driver != nil && b.Driver.DailyCost != nil {
+		b.TotalDriverCost = bookingService.CalculateDriverCost(b)
+	} else {
+		b.TotalDriverCost = 0
+	}
+
 	return u.bookingRepo.Update(ctx, b)
 }
 
 func (u *BookingUsecase) Delete(ctx context.Context, id int) error {
-	// when delete booking, optionally increment stock back (naive)
 	b, err := u.bookingRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -113,11 +118,13 @@ func (u *BookingUsecase) Delete(ctx context.Context, id int) error {
 	if err := u.bookingRepo.Delete(ctx, id); err != nil {
 		return err
 	}
-	// increase stock
+
+	// restore car stock
 	car, err := u.carRepo.GetByID(ctx, b.CarID)
 	if err == nil {
-		car.Stock = car.Stock + 1
+		car.Stock++
 		_ = u.carRepo.Update(ctx, car)
 	}
+
 	return nil
 }

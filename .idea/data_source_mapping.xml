@@ -3,5 +3,6 @@
   <component name="DataSourcePerFileMappings">
     <file url="file://$PROJECT_DIR$/cmd/migration/001_init.sql" value="99a0806c-c069-4b4b-9d7b-35aa3e72365d" />
     <file url="file://$PROJECT_DIR$/cmd/migration/002_add_membership.sql" value="99a0806c-c069-4b4b-9d7b-35aa3e72365d" />
+    <file url="file://$PROJECT_DIR$/cmd/migration/003_add_driver.sql" value="99a0806c-c069-4b4b-9d7b-35aa3e72365d" />
   </component>
 </project>
